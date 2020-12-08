@@ -1,0 +1,46 @@
+data:
+  mode: min
+  n_src: 2
+  sample_rate: 8000
+  segment: 2.0
+  task: sep_clean
+  train_dir: wsj0-mix/2speakers/wav8k/min/tr
+  valid_dir: wsj0-mix/2speakers/wav8k/min/cv
+filterbank:
+  kernel_size: 2
+  n_filters: 64
+  stride: 1
+main_args:
+  corpus: wsj0-mix
+  exp_dir: exp/train_dprnn_DPRNNTasNet_wsj0-2mix_sep_clean_new_8gpu
+  help: null
+  load_path: null
+  model: DPRNNTasNet
+  multi_task: false
+  real_batch_size: 24
+  resume_ckpt: null
+  train_enh_dir: null
+masknet:
+  bidirectional: true
+  bn_chan: 128
+  chunk_size: 250
+  dropout: 0
+  hid_size: 128
+  hop_size: 125
+  in_chan: 64
+  mask_act: relu
+  n_repeats: 6
+  n_src: 2
+  out_chan: 64
+optim:
+  lr: 0.001
+  optimizer: adam
+  weight_decay: 1.0e-05
+positional arguments: {}
+training:
+  batch_size: 24
+  early_stop: true
+  epochs: 800
+  gradient_clipping: 5
+  half_lr: true
+  num_workers: 8
