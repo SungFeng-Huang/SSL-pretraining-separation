@@ -5,7 +5,7 @@ This is the official repository of [SELF-SUPERVISED PRE-TRAINING REDUCES LABEL P
 ## Organizing Progress
 ### Corpus Preprocessing
 * [x] WSJ0-2mix
-* [ ] Libri2Mix
+* [x] Libri2Mix
 
 ## Reference
 The corpus preprocessing codes were adapted from [asteroid/egs/librimix/ConvTasNet/](https://github.com/asteroid-team/asteroid/tree/master/egs/librimix/ConvTasNet) and [asteroid/egs/wham/ConvTasNet/](https://github.com/asteroid-team/asteroid/tree/master/egs/wham/ConvTasNet).

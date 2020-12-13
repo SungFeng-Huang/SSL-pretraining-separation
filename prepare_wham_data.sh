@@ -29,14 +29,6 @@ stage=0  # Controls from which stage to start
 
 . utils/parse_options.sh
 
-sr_string=$(($sample_rate/1000))
-suffix=wav${sr_string}k/$mode
-dumpdir=data/wham/$suffix  # directory to put generated json file
-
-train_dir=$dumpdir/tr
-valid_dir=$dumpdir/cv
-test_dir=$dumpdir/tt
-
 if [[ $stage -le  0 ]]; then
   echo "Stage 0: Converting sphere files to wav files"
   . local/wham/convert_sphere2wav.sh --sphere_dir $sphere_dir --wav_dir $wsj0_wav_dir
