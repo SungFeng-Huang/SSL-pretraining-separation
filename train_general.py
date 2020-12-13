@@ -17,7 +17,7 @@ from asteroid.engine.system import System
 from asteroid.engine.schedulers import DPTNetScheduler
 from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
 
-from utils import MultiTaskDataLoader, MultiTaskLossWrapper, MultiTaskBatchSampler
+from utils import MultiTaskDataLoader, MultiTaskLossWrapper
 
 # Keys which are not in the conf.yml file can be added here.
 # In the hierarchical dictionary created when parsing, the key `key` can be
@@ -28,18 +28,16 @@ from utils import MultiTaskDataLoader, MultiTaskLossWrapper, MultiTaskBatchSampl
 parser = argparse.ArgumentParser()
 parser.add_argument("--corpus", default="LibriMix", help="LibriMix / wsj0-mix")
 parser.add_argument("--model", default="ConvTasNet", help="ConvTasNet / DPRNNTasNet / DPTNet")
+parser.add_argument("--strategy", default="from_scratch", help="from_scratch / pretrained / multi_task")
 parser.add_argument("--exp_dir", default="exp/tmp", help="Full path to save best validation model")
-parser.add_argument("--load_path", default=None, help="Checkpoint path to load.")
-parser.add_argument("--real_batch_size", type=int, default=12, help="Using accumulate_grad_batches.")
-parser.add_argument("--multi_task", action="store_true", help="Multi-task training with speech enhancement.")
-parser.add_argument("--train_enh_dir", default=None, help="Multi-task data dir.")
-parser.add_argument("--resume_ckpt", default=None, help="resume training")
+parser.add_argument("--real_batch_size", type=int, default=12, help="Batch size on each gpu when using accumulate gradients.")
+parser.add_argument("--resume_ckpt", default=None, help="Checkpoint path to load for resume-training")
 
-# MODEL = {
-    # "ConvTasNet": ConvTasNet,
-    # "DPRNNTasNet": DPRNNTasNet,
-    # "DPTNet": DPTNet,
-# }
+known_args = parser.parse_known_args()[0]
+if known_args.strategy == "pretrained":
+    parser.add_argument("--load_path", default=None, help="Checkpoint path to load for fine-tuning.")
+elif known_args.strategy == "multi_task":
+    parser.add_argument("--train_enh_dir", default=None, help="Multi-task data dir.")
 
 
 def main(conf):
@@ -51,7 +49,6 @@ def main(conf):
             n_src=conf["data"]["n_src"],
             segment=conf["data"]["segment"],
         )
-
         val_set = LibriMix(
             csv_dir=conf["data"]["valid_dir"],
             task=conf["data"]["task"],
@@ -59,6 +56,7 @@ def main(conf):
             n_src=conf["data"]["n_src"],
             segment=conf["data"]["segment"],
         )
+
     elif conf["main_args"]["corpus"] == "wsj0-mix":
         train_set = Wsj0mixDataset(
             json_dir=conf["data"]["train_dir"],
@@ -66,7 +64,6 @@ def main(conf):
             n_src=conf["data"]["n_src"],
             segment=conf["data"]["segment"],
         )
-
         val_set = Wsj0mixDataset(
             json_dir=conf["data"]["valid_dir"],
             sample_rate=conf["data"]["sample_rate"],
@@ -82,14 +79,6 @@ def main(conf):
             drop_last=True,
             num_workers=conf["training"]["num_workers"],
         )
-
-        val_loader = DataLoader(
-            val_set,
-            shuffle=False,
-            batch_size=conf["main_args"]["real_batch_size"],
-            num_workers=conf["training"]["num_workers"],
-            drop_last=True,
-        )
         conf["masknet"].update({"n_src": conf["data"]["n_src"]})
 
     else:
@@ -100,15 +89,6 @@ def main(conf):
             n_src=1,
             segment=conf["data"]["segment"],
         )
-
-        # val_enh_set = LibriMix(
-            # csv_dir=conf["main_args"]["valid_enh_dir"],
-            # task="enh_single",
-            # sample_rate=conf["data"]["sample_rate"],
-            # n_src=1,
-            # segment=conf["data"]["segment"],
-        # )
-
         train_loader = MultiTaskDataLoader(
             [train_set, train_enh_set],
             shuffle=True,
@@ -116,48 +96,55 @@ def main(conf):
             drop_last=True,
             num_workers=conf["training"]["num_workers"],
         )
-
-        val_loader = DataLoader(
-            val_set,
-            shuffle=False,
-            batch_size=conf["main_args"]["real_batch_size"],
-            num_workers=conf["training"]["num_workers"],
-            drop_last=True,
-        )
-
-        # val_enh_loader = DataLoader(
-            # val_enh_set,
-            # shuffle=False,
-            # batch_size=conf["main_args"]["real_batch_size"],
-            # num_workers=conf["training"]["num_workers"],
-            # drop_last=True,
-        # )
         conf["masknet"].update({"n_src": conf["data"]["n_src"] + 1})
 
+    val_loader = DataLoader(
+        val_set,
+        shuffle=False,
+        batch_size=conf["main_args"]["real_batch_size"],
+        num_workers=conf["training"]["num_workers"],
+        drop_last=True,
+    )
+
     model = getattr(asteroid, conf["main_args"]["model"])(**conf["filterbank"], **conf["masknet"])
-    # model = ConvTasNet(**conf["filterbank"], **conf["masknet"])
-    if conf["main_args"]["load_path"] is not None:
-        all_states = torch.load(conf["main_args"]["load_path"], map_location="cpu")
-        if "state_dict" in all_states:
-            del all_states["state_dict"]["masker.mask_net.1.weight"]
-            del all_states["state_dict"]["masker.mask_net.1.bias"]
+
+    if conf["main_args"]["strategy"] == "pretrained":
+        if conf["main_args"]["load_path"] is not None:
+            all_states = torch.load(conf["main_args"]["load_path"], map_location="cpu")
+            assert "state_dict" in all_states
+
+            # If the checkpoint is not the serialized "best_model.pth", its keys 
+            # would start with "model.", which should be removed to avoid none 
+            # of the parameters are loaded.
+            for key in all_states["state_dict"]:
+                if key.startswith("model"):
+                    all_states["state_dict"][key.split('.', 1)[1]] = all_states["state_dict"][key]
+                    del all_states["state_dict"][key]
+
+            # For debugging, set strict=True to check whether only the following
+            # parameters have different sizes (since n_src=1 for pre-training
+            # and n_src=2 for fine-tuning):
+            # for ConvTasNet: "masker.mask_net.1.*"
+            # for DPRNNTasNet/DPTNet: "masker.first_out.1.*"
             model.load_state_dict(all_states["state_dict"], strict=False)
-        else:
-            del all_states["model"]["masker.mask_net.1.weight"]
-            del all_states["model"]["masker.mask_net.1.bias"]
-            model.load_state_dict(all_states["model"], strict=False)
+
     optimizer = make_optimizer(model.parameters(), **conf["optim"])
+
     # Define scheduler
     scheduler = None
     if conf["main_args"]["model"] == "DPTNet":
+        steps_per_epoch = len(train_loader) // conf["training"]["batch_size"]
         scheduler = {
             "scheduler": DPTNetScheduler(
-                optimizer, len(train_loader) // conf["training"]["batch_size"], 64
+                optimizer=optimizer,
+                steps_per_epoch=steps_per_epoch,
+                d_model=model.mha_in_dim,
             ),
             "interval": "batch",
         }
     elif conf["training"]["half_lr"]:
         scheduler = ReduceLROnPlateau(optimizer=optimizer, factor=0.5, patience=5)
+
     # Just after instantiating, save the args. Easy loading in the future.
     exp_dir = conf["main_args"]["exp_dir"]
     os.makedirs(exp_dir, exist_ok=True)
@@ -176,61 +163,62 @@ def main(conf):
         optimizer=optimizer,
         train_loader=train_loader,
         val_loader=val_loader,
-        # val_loader=[val_loader, val_enh_loader],
         scheduler=scheduler,
         config=conf,
     )
 
     # Define callbacks
+    callbacks = []
     checkpoint_dir = os.path.join(exp_dir, "checkpoints/")
     checkpoint = ModelCheckpoint(
         checkpoint_dir, monitor="val_loss", mode="min", save_top_k=5, verbose=True
-        # checkpoint_dir, monitor="val_loss", mode="min", save_top_k=-1, verbose=True
-    )
-    early_stopping = False
+    ) # save_top_k=-1 to save every epochs, for analyzing permutation switches
+    callbacks.append(checkpoint)
     if conf["training"]["early_stop"]:
-        early_stopping = EarlyStopping(monitor="val_loss", patience=30, verbose=True)
+        callbacks.append(EarlyStopping(monitor="val_loss", mode="min", patience=30, verbose=True))
 
 
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
+    distributed_backend = "ddp" if torch.cuda.is_available() else None
+    accumulate_grad_batches=int(conf["training"]["batch_size"] / conf["main_args"]["real_batch_size"])
+
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
-        checkpoint_callback=checkpoint,
-        early_stop_callback=early_stopping,
+        callbacks=callbacks,
         default_root_dir=exp_dir,
         gpus=gpus,
-        distributed_backend="dp",
-        train_percent_check=1.0,  # Useful for fast experiment
+        distributed_backend=distributed_backend,
+        limit_train_batches=1.0,  # Useful for fast experiment
         gradient_clip_val=5.0,
-        accumulate_grad_batches=int(conf["training"]["batch_size"]/conf["main_args"]["real_batch_size"]),
+        accumulate_grad_batches=accumulate_grad_batches,
         resume_from_checkpoint=conf["main_args"]["resume_ckpt"],
     )
     trainer.fit(system)
-    # trainer.fit(system, val_dataloaders=[val_loader, val_enh_loader])
 
     best_k = {k: v.item() for k, v in checkpoint.best_k_models.items()}
     with open(os.path.join(exp_dir, "best_k_models.json"), "w") as f:
         json.dump(best_k, f, indent=0)
 
-    # state_dict = torch.load(checkpoint.best_model_path)
-    # system.load_state_dict(state_dict=state_dict["state_dict"])
-    # system.cpu()
+    state_dict = torch.load(checkpoint.best_model_path)
+    system.load_state_dict(state_dict=state_dict["state_dict"])
+    system.cpu()
 
-    # to_save = system.model.serialize()
-    # to_save.update(train_set.get_infos())
-    # torch.save(to_save, os.path.join(exp_dir, "best_model.pth"))
+    to_save = system.model.serialize()
+    to_save.update(train_set.get_infos())
+    torch.save(to_save, os.path.join(exp_dir, "best_model.pth"))
 
 
 if __name__ == "__main__":
     import yaml
-    from pprint import pprint as print
+    from pprint import pprint
     from asteroid.utils import prepare_parser_from_dict, parse_args_as_dict
 
+    model_type = known_args.model
     # We start with opening the config file conf.yml as a dictionary from
     # which we can create parsers. Each top level key in the dictionary defined
     # by the YAML file creates a group in the parser.
-    with open("local/conf.yml") as f:
+    with open(f"local/{model_type}.yml") as f:
         def_conf = yaml.safe_load(f)
     parser = prepare_parser_from_dict(def_conf, parser=parser)
     # Arguments are then parsed into a hierarchical dictionary (instead of
@@ -240,5 +228,5 @@ if __name__ == "__main__":
     # the attributes in an non-hierarchical structure. It can be useful to also
     # have it so we included it here but it is not used.
     arg_dic, plain_args = parse_args_as_dict(parser, return_plain_args=True)
-    print(arg_dic)
+    pprint(arg_dic)
     main(arg_dic)

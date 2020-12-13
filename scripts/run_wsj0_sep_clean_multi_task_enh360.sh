@@ -78,7 +78,7 @@ if [[ $stage -le 1 ]]; then
   CUDA_VISIBLE_DEVICES=$id $python_path train_general.py --exp_dir $expdir \
     --corpus wsj0-mix \
     --real_batch_size 6 \
-    --multi_task \
+    --strategy multi_task \
     --train_enh_dir data/wav8k/min/train-360/ \
 		--n_blocks $n_blocks \
 		--n_repeats $n_repeats \

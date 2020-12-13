@@ -13,7 +13,6 @@ storage_dir=
 
 # Path to the python you'll use for the experiment. Defaults to the current python
 # You can run ./utils/prepare_python_env.sh to create a suitable python environment, paste the output here.
-source venv/bin/activate
 python_path=python
 
 # Example usage
@@ -75,7 +74,7 @@ if [[ $stage -le 1 ]]; then
     #--load_path $loadpth \
         #--multi_task \
         #--train_enh_dir data/wav8k/min/train-360/ \
-    CUDA_VISIBLE_DEVICES=$id $python_path train_DPTNet_general.py --exp_dir $expdir \
+    CUDA_VISIBLE_DEVICES=$id $python_path train_general.py --exp_dir $expdir \
         --corpus wsj0-mix \
         --model DPTNet \
         --real_batch_size 8 \
