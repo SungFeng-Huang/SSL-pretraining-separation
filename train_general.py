@@ -10,14 +10,13 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 
 import asteroid
 from asteroid.models import ConvTasNet, DPRNNTasNet, DPTNet
-from asteroid.data import LibriMix
-from asteroid.data.wsj0_mix import Wsj0mixDataset
+from asteroid.data import LibriMix, WhamDataset, Wsj0mixDataset
 from asteroid.engine.optimizers import make_optimizer
 from asteroid.engine.system import System
 from asteroid.engine.schedulers import DPTNetScheduler
 from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
 
-from utils import MultiTaskDataLoader, MultiTaskLossWrapper
+from utils import make_dataloaders, MultiTaskLossWrapper
 
 # Keys which are not in the conf.yml file can be added here.
 # In the hierarchical dictionary created when parsing, the key `key` can be
@@ -26,11 +25,12 @@ from utils import MultiTaskDataLoader, MultiTaskLossWrapper
 # By default train.py will use all available GPUs. The `id` option in run.sh
 # will limit the number of available GPUs for train.py .
 parser = argparse.ArgumentParser()
-parser.add_argument("--corpus", default="LibriMix", help="LibriMix / wsj0-mix")
-parser.add_argument("--model", default="ConvTasNet", help="ConvTasNet / DPRNNTasNet / DPTNet")
-parser.add_argument("--strategy", default="from_scratch", help="from_scratch / pretrained / multi_task")
+parser.add_argument("--corpus", default="LibriMix", choices=["LibriMix", "wsj0-mix"])
+parser.add_argument("--model", default="ConvTasNet", choices=["ConvTasNet", "DPRNNTasNet", "DPTNet"])
+parser.add_argument("--strategy", default="from_scratch", choices=["from_scratch", "pretrained", "multi_task"])
 parser.add_argument("--exp_dir", default="exp/tmp", help="Full path to save best validation model")
-parser.add_argument("--real_batch_size", type=int, default=12, help="Batch size on each gpu when using accumulate gradients.")
+parser.add_argument("--save_top_k", type=int, default=5, help="Save top k checkpoints. -1 for saving all checkpoints.")
+parser.add_argument("--real_batch_size", type=int, default=0, help="Batch size on each gpu when using accumulate gradients.")
 parser.add_argument("--resume_ckpt", default=None, help="Checkpoint path to load for resume-training")
 
 known_args = parser.parse_known_args()[0]
@@ -41,70 +41,26 @@ elif known_args.strategy == "multi_task":
 
 
 def main(conf):
-    if conf["main_args"]["corpus"] == "LibriMix":
-        train_set = LibriMix(
-            csv_dir=conf["data"]["train_dir"],
-            task=conf["data"]["task"],
-            sample_rate=conf["data"]["sample_rate"],
-            n_src=conf["data"]["n_src"],
-            segment=conf["data"]["segment"],
-        )
-        val_set = LibriMix(
-            csv_dir=conf["data"]["valid_dir"],
-            task=conf["data"]["task"],
-            sample_rate=conf["data"]["sample_rate"],
-            n_src=conf["data"]["n_src"],
-            segment=conf["data"]["segment"],
-        )
+    train_enh_dir = None if conf["main_args"]["strategy"] != "multi_task" else conf["main_args"]["train_enh_dir"]
+    batch_size = conf["training"]["batch_size"] if conf["main_args"]["real_batch_size"] == 0 else conf["main_args"]["real_batch_size"]
 
-    elif conf["main_args"]["corpus"] == "wsj0-mix":
-        train_set = Wsj0mixDataset(
-            json_dir=conf["data"]["train_dir"],
-            sample_rate=conf["data"]["sample_rate"],
-            n_src=conf["data"]["n_src"],
-            segment=conf["data"]["segment"],
-        )
-        val_set = Wsj0mixDataset(
-            json_dir=conf["data"]["valid_dir"],
-            sample_rate=conf["data"]["sample_rate"],
-            n_src=conf["data"]["n_src"],
-            segment=conf["data"]["segment"],
-        )
-
-    if not conf["main_args"]["multi_task"]:
-        train_loader = DataLoader(
-            train_set,
-            shuffle=True,
-            batch_size=conf["main_args"]["real_batch_size"],
-            drop_last=True,
-            num_workers=conf["training"]["num_workers"],
-        )
-        conf["masknet"].update({"n_src": conf["data"]["n_src"]})
-
-    else:
-        train_enh_set = LibriMix(
-            csv_dir=conf["main_args"]["train_enh_dir"],
-            task="enh_single",
-            sample_rate=conf["data"]["sample_rate"],
-            n_src=1,
-            segment=conf["data"]["segment"],
-        )
-        train_loader = MultiTaskDataLoader(
-            [train_set, train_enh_set],
-            shuffle=True,
-            batch_size=conf["main_args"]["real_batch_size"],
-            drop_last=True,
-            num_workers=conf["training"]["num_workers"],
-        )
-        conf["masknet"].update({"n_src": conf["data"]["n_src"] + 1})
-
-    val_loader = DataLoader(
-        val_set,
-        shuffle=False,
-        batch_size=conf["main_args"]["real_batch_size"],
+    train_loader, val_loader, train_set_infos = make_dataloaders(
+        corpus=conf["main_args"]["corpus"],
+        train_dir=conf["data"]["train_dir"],
+        val_dir=conf["data"]["valid_dir"],
+        train_enh_dir=train_enh_dir,
+        task=conf["data"]["task"],
+        sample_rate=conf["data"]["sample_rate"],
+        n_src=conf["data"]["n_src"],
+        segment=conf["data"]["segment"],
+        batch_size=batch_size,
         num_workers=conf["training"]["num_workers"],
-        drop_last=True,
     )
+
+    if conf["main_args"]["strategy"] != "multi_task":
+        conf["masknet"].update({"n_src": conf["data"]["n_src"]})
+    else:
+        conf["masknet"].update({"n_src": conf["data"]["n_src"]+1})
 
     model = getattr(asteroid, conf["main_args"]["model"])(**conf["filterbank"], **conf["masknet"])
 
@@ -116,7 +72,7 @@ def main(conf):
             # If the checkpoint is not the serialized "best_model.pth", its keys 
             # would start with "model.", which should be removed to avoid none 
             # of the parameters are loaded.
-            for key in all_states["state_dict"]:
+            for key in list(all_states["state_dict"].keys()):
                 if key.startswith("model"):
                     all_states["state_dict"][key.split('.', 1)[1]] = all_states["state_dict"][key]
                     del all_states["state_dict"][key]
@@ -126,6 +82,12 @@ def main(conf):
             # and n_src=2 for fine-tuning):
             # for ConvTasNet: "masker.mask_net.1.*"
             # for DPRNNTasNet/DPTNet: "masker.first_out.1.*"
+            if conf["main_args"]["model"] == "ConvTasNet":
+                del all_states["state_dict"]["masker.mask_net.1.weight"]
+                del all_states["state_dict"]["masker.mask_net.1.bias"]
+            elif conf["main_args"]["model"] in ["DPRNNTasNet", "DPTNet"]:
+                del all_states["state_dict"]["masker.first_out.1.weight"]
+                del all_states["state_dict"]["masker.first_out.1.bias"]
             model.load_state_dict(all_states["state_dict"], strict=False)
 
     optimizer = make_optimizer(model.parameters(), **conf["optim"])
@@ -153,7 +115,7 @@ def main(conf):
         yaml.safe_dump(conf, outfile)
 
     # Define Loss function.
-    if conf["main_args"]["multi_task"]:
+    if conf["main_args"]["strategy"] == "multi_task":
         loss_func = MultiTaskLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
     else:
         loss_func = PITLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
@@ -171,8 +133,8 @@ def main(conf):
     callbacks = []
     checkpoint_dir = os.path.join(exp_dir, "checkpoints/")
     checkpoint = ModelCheckpoint(
-        checkpoint_dir, monitor="val_loss", mode="min", save_top_k=5, verbose=True
-    ) # save_top_k=-1 to save every epochs, for analyzing permutation switches
+        checkpoint_dir, monitor="val_loss", mode="min", save_top_k=conf["main_args"]["save_top_k"], verbose=True
+    )
     callbacks.append(checkpoint)
     if conf["training"]["early_stop"]:
         callbacks.append(EarlyStopping(monitor="val_loss", mode="min", patience=30, verbose=True))
@@ -180,16 +142,20 @@ def main(conf):
 
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
-    distributed_backend = "ddp" if torch.cuda.is_available() else None
-    accumulate_grad_batches=int(conf["training"]["batch_size"] / conf["main_args"]["real_batch_size"])
+    distributed_backend = "dp" if torch.cuda.is_available() else None   # Don't use ddp for multi-task training
+    accumulate_grad_batches=int(conf["training"]["batch_size"] / batch_size)
 
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
-        callbacks=callbacks,
+        # callbacks=callbacks,  # With some unknown problems
+        checkpoint_callback=callbacks[0],
+        early_stop_callback=callbacks[1],
         default_root_dir=exp_dir,
         gpus=gpus,
         distributed_backend=distributed_backend,
         limit_train_batches=1.0,  # Useful for fast experiment
+        # fast_dev_run=True, # Useful for debugging
+        overfit_pct=0.01,
         gradient_clip_val=5.0,
         accumulate_grad_batches=accumulate_grad_batches,
         resume_from_checkpoint=conf["main_args"]["resume_ckpt"],
@@ -205,7 +171,7 @@ def main(conf):
     system.cpu()
 
     to_save = system.model.serialize()
-    to_save.update(train_set.get_infos())
+    to_save.update(train_set_infos)
     torch.save(to_save, os.path.join(exp_dir, "best_model.pth"))
 
 

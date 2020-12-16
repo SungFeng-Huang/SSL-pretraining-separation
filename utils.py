@@ -1,8 +1,34 @@
 import torch
 from torch import nn
+from torch.utils.data import DataLoader, Dataset
+from asteroid.data import LibriMix, WhamDataset, Wsj0mixDataset
 from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
-from asteroid import ConvTasNet
 
+
+def make_dataloaders(corpus, train_dir, val_dir, train_enh_dir=None, task="sep_clean",
+                     sample_rate=8000, n_src=2, segment=4.0, batch_size=4, num_workers=None,):
+    if corpus == "LibriMix":
+        train_set = LibriMix(csv_dir=train_dir, task=task, sample_rate=sample_rate, n_src=n_src, segment=segment,)
+        val_set = LibriMix(csv_dir=valid_dir, task=task, sample_rate=sample_rate, n_src=n_src, segment=segment,)
+    elif corpus == "wsj0-mix":
+        train_set = WhamDataset(json_dir=train_dir, task=task, sample_rate=sample_rate, nondefault_nsrc=n_src, segment=segment,)
+        val_set = WhamDataset(json_dir=val_dir, task=task, sample_rate=sample_rate, nondefault_nsrc=n_src, segment=segment,)
+
+    if train_enh_dir is None:
+        train_loader = DataLoader(train_set, shuffle=True, batch_size=batch_size, num_workers=num_workers, drop_last=True,)
+    else:
+        train_enh_set = LibriMix(csv_dir=train_enh_dir, task="enh_single", sample_rate=sample_rate, n_src=1, segment=segment,)
+        train_loader = MultiTaskDataLoader([train_set, train_enh_set],
+                                           shuffle=True, batch_size=batch_size, drop_last=True, num_workers=num_workers,)
+    val_loader = DataLoader(val_set, shuffle=True, batch_size=batch_size, num_workers=num_workers, drop_last=True,)
+    
+    infos = train_set.get_infos()
+    if train_enh_dir:
+        enh_infos = train_enh_set.get_infos()
+        for key in enh_infos:
+            infos["enh_"+key] = enh_infos[key]
+    
+    return train_loader, val_loader, infos
 
 class MultiTaskLossWrapper(PITLossWrapper):
     """ n_src separation + 1_src enhancement
@@ -43,6 +69,9 @@ class MultiTaskBatchSampler(torch.utils.data.BatchSampler):
 
 
 def MultiTaskDataLoader(data_sources, shuffle, batch_size, drop_last, generator=None, **kwargs):
+    # NOTE: would cause some errors when using pytorch_lightning ddp, since
+    # pytorch_lightning would automatically use DistributedDataSampler.
+    # Use pytorch_lightning dp mode instead.
     dataset = torch.utils.data.ConcatDataset(data_sources)
     cum_thresholds = [0]
     for data_source in data_sources:

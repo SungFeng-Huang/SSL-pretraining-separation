@@ -9,7 +9,7 @@ set -o pipefail
 storage_dir=$PWD
 
 # If you start from the sphere files, specify the path to the directory and start from stage 0
-sphere_dir=root_of_your_wsj0/WSJ0  # Directory containing sphere files
+sphere_dir=$storage_dir/WSJ0  # Directory containing sphere files
 # If you already have wsj0 wav files, specify the path to the directory here and start from stage 1
 wsj0_wav_dir=$storage_dir/wsj0_wav
 # If you already have the WHAM mixtures, specify the path to the directory here and start from stage 2
@@ -30,18 +30,18 @@ stage=0  # Controls from which stage to start
 . utils/parse_options.sh
 
 if [[ $stage -le  0 ]]; then
-  echo "Stage 0: Converting sphere files to wav files"
+  echo "WHAM Stage 0: Converting sphere files to wav files"
   . local/wham/convert_sphere2wav.sh --sphere_dir $sphere_dir --wav_dir $wsj0_wav_dir
 fi
 
 if [[ $stage -le  1 ]]; then
-	echo "Stage 1: Generating 8k and 16k WHAM dataset"
+	echo "WHAM Stage 1: Generating 8k and 16k WHAM dataset"
   . local/wham/prepare_data.sh --wav_dir $wsj0_wav_dir --out_dir $wham_wav_dir --python_path $python_path
 fi
 
 if [[ $stage -le  2 ]]; then
 	# Make json directories with min/max modes and sampling rates
-	echo "Stage 2: Generating json files including wav path and duration"
+	echo "WHAM Stage 2: Generating json files including wav path and duration"
 	for sr_string in 8 16; do
 		for mode_option in min max; do
 			tmp_dumpdir=data/wham/wav${sr_string}k/$mode_option
