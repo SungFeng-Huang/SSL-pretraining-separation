@@ -2,6 +2,7 @@ __pycache__/
 tools/
 data/
 pretrained/
+exp/
 
 wham_wav/
 wsj0_wav/

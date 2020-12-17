@@ -1,10 +1,11 @@
 data:
+  mode: min
   n_src: 2
   sample_rate: 8000
   segment: 3
   task: sep_clean
-  train_dir: data/wav8k/min/train-100
-  valid_dir: data/wav8k/min/dev
+  train_dir: data/librimix/wav8k/min/train-100
+  valid_dir: data/librimix/wav8k/min/dev
 filterbank:
   kernel_size: 16
   n_filters: 512
@@ -24,6 +25,6 @@ positional arguments: {}
 training:
   batch_size: 24
   early_stop: true
-  epochs: 200
+  epochs: 100
   half_lr: true
   num_workers: 8

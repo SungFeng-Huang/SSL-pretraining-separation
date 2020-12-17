@@ -9,7 +9,7 @@ def make_dataloaders(corpus, train_dir, val_dir, train_enh_dir=None, task="sep_c
                      sample_rate=8000, n_src=2, segment=4.0, batch_size=4, num_workers=None,):
     if corpus == "LibriMix":
         train_set = LibriMix(csv_dir=train_dir, task=task, sample_rate=sample_rate, n_src=n_src, segment=segment,)
-        val_set = LibriMix(csv_dir=valid_dir, task=task, sample_rate=sample_rate, n_src=n_src, segment=segment,)
+        val_set = LibriMix(csv_dir=val_dir, task=task, sample_rate=sample_rate, n_src=n_src, segment=segment,)
     elif corpus == "wsj0-mix":
         train_set = WhamDataset(json_dir=train_dir, task=task, sample_rate=sample_rate, nondefault_nsrc=n_src, segment=segment,)
         val_set = WhamDataset(json_dir=val_dir, task=task, sample_rate=sample_rate, nondefault_nsrc=n_src, segment=segment,)

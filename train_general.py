@@ -30,7 +30,7 @@ parser.add_argument("--model", default="ConvTasNet", choices=["ConvTasNet", "DPR
 parser.add_argument("--strategy", default="from_scratch", choices=["from_scratch", "pretrained", "multi_task"])
 parser.add_argument("--exp_dir", default="exp/tmp", help="Full path to save best validation model")
 parser.add_argument("--save_top_k", type=int, default=5, help="Save top k checkpoints. -1 for saving all checkpoints.")
-parser.add_argument("--real_batch_size", type=int, default=0, help="Batch size on each gpu when using accumulate gradients.")
+parser.add_argument("--real_batch_size", type=int, default=0, help="Batch size on all gpu when using accumulate gradients.")
 parser.add_argument("--resume_ckpt", default=None, help="Checkpoint path to load for resume-training")
 
 known_args = parser.parse_known_args()[0]
@@ -100,7 +100,7 @@ def main(conf):
             "scheduler": DPTNetScheduler(
                 optimizer=optimizer,
                 steps_per_epoch=steps_per_epoch,
-                d_model=model.mha_in_dim,
+                d_model=model.masker.mha_in_dim,
             ),
             "interval": "batch",
         }

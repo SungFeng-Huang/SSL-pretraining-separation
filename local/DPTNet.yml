@@ -4,8 +4,8 @@ data:
   sample_rate: 8000
   segment: 4.0
   task: sep_clean
-  train_dir: wsj0-mix/2speakers/wav8k/min/tr
-  valid_dir: wsj0-mix/2speakers/wav8k/min/cv
+  train_dir: data/wham/wav8k/min/tr
+  valid_dir: data/wham/wav8k/min/cv
 filterbank:
   kernel_size: 2
   n_filters: 64
