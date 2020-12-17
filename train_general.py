@@ -148,14 +148,14 @@ def main(conf):
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
         # callbacks=callbacks,  # With some unknown problems
-        checkpoint_callback=callbacks[0],
+        checkpoint_callback=checkpoint,
         early_stop_callback=callbacks[1],
         default_root_dir=exp_dir,
         gpus=gpus,
         distributed_backend=distributed_backend,
         limit_train_batches=1.0,  # Useful for fast experiment
         # fast_dev_run=True, # Useful for debugging
-        overfit_pct=0.01,
+        # overfit_pct=0.001, # Useful for debugging
         gradient_clip_val=5.0,
         accumulate_grad_batches=accumulate_grad_batches,
         resume_from_checkpoint=conf["main_args"]["resume_ckpt"],
