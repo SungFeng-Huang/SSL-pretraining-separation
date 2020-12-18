@@ -24,9 +24,11 @@ Train
 ### Example 1: training from scratch
 - Conv-TasNet (default)
 - WSJ0-2mix (default)
-- multi-GPU, gpu_id=CUDA_VISIBLE_DEVICES (default)
+- multi-GPU, CUDA_VISIBLE_DEVICES=0,1
 ```bash
-bash ./run.sh --model ConvTasNet \
+# CUDA_VISIBLE_DEVICES could be passed to --id
+bash ./run.sh --id 0,1 \
+              --model ConvTasNet \
               --corpus wsj0-mix \
               --strategy from_scratch
 ```
@@ -38,21 +40,22 @@ bash ./run.sh --model ConvTasNet \
 - Libri1Mix train-360
   - Libri1Mix is actually Libri2Mix, but only speaker1 is used to mix with noise
 - n_src: 1 (only output single speaker)
-- multi-GPU, gpu_id=CUDA_VISIBLE_DEVICES (default)
+- multi-GPU, CUDA_VISIBLE_DEVICES=0,1,2,3
 ```bash
-bash ./run.sh --model ConvTasNet \
-              --corpus LibriMix \
-              --task enh_single \
-              --n_src 1 \
-              --train_set train-360 \
-              --strategy from_scratch
+# CUDA_VISIBLE_DEVICES could also be specified in front
+CUDA_VISIBLE_DEVICES=0,1,2,3 bash ./run.sh --model ConvTasNet \
+                                           --corpus LibriMix \
+                                           --task enh_single \
+                                           --n_src 1 \
+                                           --train_set train-360 \
+                                           --strategy from_scratch
 ```
 
 ### Example 3: fine-tuning
 - DPRNN
 - Libri2Mix
 - pretrained checkpoint: exp/xxx/model.pth
-- single-GPU, gpu_id=0
+- single-GPU, CUDA_VISIBLE_DEVICES=0
 ```bash
 bash ./run.sh --id 0 \
               --model DPRNNTasNet \
@@ -66,11 +69,11 @@ bash ./run.sh --id 0 \
 - WSJ0-2mix (default)
 - multi-task training
 - speech denoise/enhancement data path: `data/librimix/wav8k/min/train-360/`
-- multi-GPU, gpu_id=0,1,2,3
+- multi-GPU, CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 - total batch size: 8
 - batch size on each gpu: 1 (need to accumulate gradient for 2 times per update)
 ```bash
-bash ./run.sh --id 0,1,2,3 \
+bash ./run.sh --id 0,1,2,3,4,5,6,7 \
               --model DPTNet \
               --strategy multi_task \
               --enh_set train-360 \
