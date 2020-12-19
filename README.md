@@ -1,6 +1,6 @@
 # SSL-pretraining-separation
 This is the official repository of [SELF-SUPERVISED PRE-TRAINING REDUCES LABEL PERMUTATION INSTABILITY OF SPEECH SEPARATION
-](https://arxiv.org/pdf/2010.15366.pdf), which is not organized yet.
+](https://arxiv.org/pdf/2010.15366.pdf), which is not fully organized yet.
 
 ------------------------------------
 Corpus Preprocessing
@@ -21,22 +21,41 @@ bash prepare_librimix_data.sh --n_src 2
 ------------------------------------
 Train
 ------------------------------------
-### Examples
+### Example 1: training from scratch
 - Conv-TasNet (default)
 - WSJ0-2mix (default)
-- training from scratch (default)
-- multi-GPU, id=CUDA_VISIBLE_DEVICES (default)
+- multi-GPU, CUDA_VISIBLE_DEVICES=0,1
 ```bash
-bash ./run.sh --model ConvTasNet \
+# CUDA_VISIBLE_DEVICES could be passed to --id
+bash ./run.sh --id 0,1 \
+              --model ConvTasNet \
               --corpus wsj0-mix \
               --strategy from_scratch
 ```
 
+### Example 2: pre-training
+- Conv-TasNet (default)
+- task: enh_single
+  - means speech enhancement/denoise with only single clean speaker
+- Libri1Mix train-360
+  - Libri1Mix is actually Libri2Mix, but only speaker1 is used to mix with noise
+- n_src: 1 (only output single speaker)
+- multi-GPU, CUDA_VISIBLE_DEVICES=0,1,2,3
+```bash
+# CUDA_VISIBLE_DEVICES could also be specified in front
+CUDA_VISIBLE_DEVICES=0,1,2,3 bash ./run.sh --model ConvTasNet \
+                                           --corpus LibriMix \
+                                           --task enh_single \
+                                           --n_src 1 \
+                                           --train_set train-360 \
+                                           --strategy from_scratch
+```
+
+### Example 3: fine-tuning
 - DPRNN
 - Libri2Mix
-- pretrain + fine-tune
 - pretrained checkpoint: exp/xxx/model.pth
-- single-GPU, id=0
+- single-GPU, CUDA_VISIBLE_DEVICES=0
 ```bash
 bash ./run.sh --id 0 \
               --model DPRNNTasNet \
@@ -45,15 +64,16 @@ bash ./run.sh --id 0 \
               --load_path exp/xxx/model.pth
 ```
 
+### Example 4: multi-task training
 - DPTNet
 - WSJ0-2mix (default)
 - multi-task training
 - speech denoise/enhancement data path: `data/librimix/wav8k/min/train-360/`
-- multi-GPU, id=0,1,2,3
+- multi-GPU, CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 - total batch size: 8
 - batch size on each gpu: 1 (need to accumulate gradient for 2 times per update)
 ```bash
-bash ./run.sh --id 0,1,2,3 \
+bash ./run.sh --id 0,1,2,3,4,5,6,7 \
               --model DPTNet \
               --strategy multi_task \
               --enh_set train-360 \
