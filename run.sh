@@ -47,6 +47,7 @@ early_stop=yes
 strategy=from_scratch
 load_path=
 enh_set=train-360
+save_top_k=-1
 
 # Optim config
 optimizer=adam
@@ -113,11 +114,12 @@ mkdir -p $expdir && echo $uuid >> $expdir/run_uuid.txt
 echo "Results from the following experiment will be stored in $expdir"
 
 
+# Remove those you want to use from yaml instead of here
 train_cmd="--corpus $corpus --model $model \
   --train_dir $train_dir --valid_dir $valid_dir \
   --task $task --sample_rate $sample_rate --n_src $n_src --segment $segment \
   --epochs $epochs --batch_size $batch_size --real_batch_size $real_batch_size \
-  --num_workers $num_workers --half_lr $half_lr --early_stop $early_stop \
+  --num_workers $num_workers --half_lr $half_lr --early_stop $early_stop --save_top_k $save_top_k \
   --optimizer $optimizer --lr $lr --weight_decay $weight_decay"
 
 # Training config

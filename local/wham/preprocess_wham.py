@@ -3,15 +3,17 @@ import argparse
 import json
 import os
 import soundfile as sf
+from tqdm import tqdm
 
 
 def preprocess_one_dir(in_dir, out_dir, out_filename):
     """ Create .json file for one condition."""
+    print(in_dir)
     file_infos = []
     in_dir = os.path.abspath(in_dir)
     wav_list = os.listdir(in_dir)
     wav_list.sort()
-    for wav_file in wav_list:
+    for wav_file in tqdm(wav_list):
         if not wav_file.endswith(".wav"):
             continue
         wav_path = os.path.join(in_dir, wav_file)

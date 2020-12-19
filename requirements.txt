@@ -1,0 +1,4 @@
+torch==1.7.1
+torchtext==0.8.0
+torchaudio==0.8.0
+asteroid
