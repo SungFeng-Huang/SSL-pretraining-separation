@@ -7,6 +7,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+pl.seed_everything(42)
 
 import asteroid
 from asteroid.models import ConvTasNet, DPRNNTasNet, DPTNet
@@ -139,6 +140,13 @@ def main(conf):
     if conf["training"]["early_stop"]:
         callbacks.append(EarlyStopping(monitor="val_loss", mode="min", patience=30, verbose=True))
 
+    comet_logger = pl.loggers.CometLogger(
+        save_dir=os.path.join(exp_dir, "comet_logs/"),
+    )
+    tb_logger = pl.loggers.TensorBoardLogger(
+        os.path.join(exp_dir, "tb_logs/"),
+    )
+
 
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
@@ -147,6 +155,7 @@ def main(conf):
 
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
+        logger=[tb_logger, comet_logger],
         # callbacks=callbacks,  # With some unknown problems
         checkpoint_callback=checkpoint,
         early_stop_callback=callbacks[1],
@@ -159,6 +168,7 @@ def main(conf):
         gradient_clip_val=5.0,
         accumulate_grad_batches=accumulate_grad_batches,
         resume_from_checkpoint=conf["main_args"]["resume_ckpt"],
+        deterministic=True,
     )
     trainer.fit(system)
 
