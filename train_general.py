@@ -148,7 +148,7 @@ def main(conf):
     tb_logger = pl.loggers.TensorBoardLogger(
         os.path.join(exp_dir, "tb_logs/"),
     )
-    comet_logger.log_parameters(conf)
+    comet_logger.log_hyperparams(conf)
 
 
     # Don't ask GPU if they are not available.
