@@ -43,6 +43,7 @@ elif known_args.strategy == "multi_task":
 def main(conf):
     train_enh_dir = None if conf["main_args"]["strategy"] != "multi_task" else conf["main_args"]["train_enh_dir"]
     batch_size = conf["training"]["batch_size"] if conf["main_args"]["real_batch_size"] == 0 else conf["main_args"]["real_batch_size"]
+    accumulate_grad_batches=int(conf["training"]["batch_size"] / batch_size)
 
     train_loader, val_loader, train_set_infos = make_dataloaders(
         corpus=conf["main_args"]["corpus"],
@@ -95,7 +96,8 @@ def main(conf):
     # Define scheduler
     scheduler = None
     if conf["main_args"]["model"] == "DPTNet":
-        steps_per_epoch = len(train_loader) // conf["training"]["batch_size"]
+        steps_per_epoch = len(train_loader) // accumulate_grad_batches
+        conf["scheduler"]["steps_per_epoch"] = steps_per_epoch
         scheduler = {
             "scheduler": DPTNetScheduler(
                 optimizer=optimizer,
@@ -143,7 +145,6 @@ def main(conf):
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
     distributed_backend = "dp" if torch.cuda.is_available() else None   # Don't use ddp for multi-task training
-    accumulate_grad_batches=int(conf["training"]["batch_size"] / batch_size)
 
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
