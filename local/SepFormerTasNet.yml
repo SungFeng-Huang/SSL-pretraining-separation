@@ -1,0 +1,39 @@
+data:
+  mode: min
+  n_src: 2
+  sample_rate: 8000
+  segment: 4.0
+  task: sep_clean
+  train_dir: data/wham/wav8k/min/tr
+  valid_dir: data/wham/wav8k/min/cv
+filterbank:
+  kernel_size: 16
+  n_filters: 256
+  stride: 8
+masknet:
+  chunk_size: 200
+  dropout: 0
+  ff_activation: relu
+  ff_hid: 2048
+  hop_size: 100
+  mask_act: relu
+  n_repeats: 2
+  k_repeats: 4
+  norm_type: gLN
+  n_heads: 16
+optim:
+  lr: 0.001
+  optimizer: adam
+  weight_decay: 1.0e-05
+positional arguments: {}
+scheduler:
+  d_model: 64
+  noam_scale: 0.2
+  steps_per_epoch: 10000
+training:
+  batch_size: 24
+  early_stop: true
+  epochs: 200
+  gradient_clipping: 5
+  half_lr: true
+  num_workers: 8

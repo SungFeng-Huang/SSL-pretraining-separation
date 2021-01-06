@@ -30,6 +30,14 @@ def make_dataloaders(corpus, train_dir, val_dir, train_enh_dir=None, task="sep_c
     
     return train_loader, val_loader, infos
 
+
+def make_test_dataset(corpus, test_dir, task="sep_clean", sample_rate=8000, n_src=2):
+    if corpus == "LibriMix":
+        test_set = LibriMix(csv_dir=test_dir, task=task, sample_rate=sample_rate, n_src=n_src, segment=None,)
+    elif corpus == "wsj0-mix":
+        test_set = WhamDataset(json_dir=test_dir, task=task, sample_rate=sample_rate, nondefault_nsrc=n_src, segment=None,)
+    return test_set
+
 class MultiTaskLossWrapper(PITLossWrapper):
     """ n_src separation + 1_src enhancement
     """
