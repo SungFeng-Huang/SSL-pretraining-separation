@@ -14,7 +14,8 @@ from asteroid.engine.system import System
 from asteroid.engine.schedulers import DPTNetScheduler
 from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
 
-from utils import make_dataloaders, MultiTaskLossWrapper
+from utils import make_dataloaders
+from utils.multi_task import MultiTaskLossWrapper
 from models.sepformer_tasnet import SepFormerTasNet, SepFormer2TasNet
 pl.seed_everything(42)
 asteroid.models.register_model(SepFormerTasNet)
@@ -173,7 +174,7 @@ def main(conf):
 
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
-    distributed_backend = "dp" if torch.cuda.is_available() else None   # Don't use ddp for multi-task training
+    distributed_backend = "ddp" if torch.cuda.is_available() else None   # Don't use ddp for multi-task training
 
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
@@ -191,6 +192,7 @@ def main(conf):
         accumulate_grad_batches=conf["main_args"]["accumulate_grad_batches"],
         resume_from_checkpoint=conf["main_args"].get("resume_ckpt", None),
         deterministic=True,
+        replace_sampler_ddp=False if conf["main_args"]["strategy"] == "multi_task" else True,
     )
     trainer.fit(system)
 
