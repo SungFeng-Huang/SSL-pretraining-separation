@@ -37,9 +37,9 @@ parser.add_argument("--resume", action="store_true", help="Resume-training")
 
 known_args = parser.parse_known_args()[0]
 if known_args.strategy == "pretrained":
-    parser.add_argument("--load_path", default=None, help="Checkpoint path to load for fine-tuning.")
+    parser.add_argument("--load_path", default=None, required=True, help="Checkpoint path to load for fine-tuning.")
 elif known_args.strategy == "multi_task":
-    parser.add_argument("--train_enh_dir", default=None, help="Multi-task data dir.")
+    parser.add_argument("--train_enh_dir", default=None, required=True, help="Multi-task data dir.")
 
 if known_args.resume:
     parser.add_argument("--resume_ckpt", default="last.ckpt", help="Checkpoint path to load for resume-training")
@@ -141,7 +141,8 @@ def main(conf):
     callbacks = []
     checkpoint_dir = os.path.join(exp_dir, "checkpoints/")
     checkpoint = ModelCheckpoint(
-        checkpoint_dir, monitor="val_loss", mode="min", save_top_k=conf["training"]["epochs"], save_last=True, verbose=True
+        dirpath=checkpoint_dir, filename='{epoch}-{step}', monitor="val_loss", mode="min",
+        save_top_k=conf["training"]["epochs"], save_last=True, verbose=True,
     )
     callbacks.append(checkpoint)
     if conf["training"]["early_stop"]:
@@ -155,7 +156,7 @@ def main(conf):
     if conf["main_args"]["comet"]:
         comet_logger = pl.loggers.CometLogger(
             save_dir=os.path.join(exp_dir, "comet_logs/"),
-            experiment_key=conf["main_args"]["comet_exp_key"],
+            experiment_key=conf["main_args"].get("comet_exp_key", None),
             log_code=True,
             log_graph=True,
             parse_args=True,
@@ -188,7 +189,7 @@ def main(conf):
         # overfit_batches=0.001, # Useful for debugging
         gradient_clip_val=5.0,
         accumulate_grad_batches=conf["main_args"]["accumulate_grad_batches"],
-        resume_from_checkpoint=conf["main_args"]["resume_ckpt"],
+        resume_from_checkpoint=conf["main_args"].get("resume_ckpt", None),
         deterministic=True,
     )
     trainer.fit(system)

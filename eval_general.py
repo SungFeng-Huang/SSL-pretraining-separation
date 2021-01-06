@@ -28,7 +28,7 @@ parser.add_argument("--test_dir", type=str, required=True, help="Test directory 
 parser.add_argument("--task", type=str, default="sep_clean", choices=["sep_clean", "sep_noisy"])
 parser.add_argument("--use_gpu", type=int, default=0, help="Whether to use the GPU for model execution")
 parser.add_argument("--exp_dir", default="exp/tmp", help="Experiment root")
-parser.add_argument("--out_dir", type=str, required=True, help="Directory in exp_dir where the eval results will be stored")
+parser.add_argument("--out_dir", type=str, default="results/best_model", help="Directory in exp_dir where the eval results will be stored")
 parser.add_argument("--n_save_ex", type=int, default=10, help="Number of audio examples to save, -1 means all")
 
 parser.add_argument("--ckpt_path", default="best_model.pth", help="Experiment checkpoint path")
@@ -39,7 +39,11 @@ compute_metrics = ["si_sdr", "sdr", "sir", "sar", "stoi"]
 
 def main(conf):
     model_path = os.path.join(conf["exp_dir"], conf["ckpt_path"])
+
+    # all resulting files would be saved in eval_save_dir
     eval_save_dir = os.path.join(conf["exp_dir"], conf["out_dir"])
+    os.makedirs(eval_save_dir, exist_ok=True)
+
     if not os.path.exists(os.path.join(eval_save_dir, "final_metrics.json")):
         if conf["ckpt_path"] == "best_model.pth":
             # serialized checkpoint
@@ -66,10 +70,6 @@ def main(conf):
             )
         # Used to reorder sources only
         loss_func = PITLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
-
-        # all resulting files would be saved in eval_save_dir
-        eval_save_dir = os.path.join(conf["exp_dir"], conf["out_dir"])
-        os.makedirs(eval_save_dir, exist_ok=True)
 
         # Randomly choose the indexes of sentences to save.
         ex_save_dir = os.path.join(eval_save_dir, "examples/")

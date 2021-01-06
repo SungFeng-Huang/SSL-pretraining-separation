@@ -163,18 +163,23 @@ if [[ $stage -le 1 ]]; then
 
 	# Get ready to publish
   # NOTE: Not recommend to publish from this repo, the recipe_name would be
-  # confusing. If you wish to upload your pretrained models, please directly run
-  # the code from asteroid official repo and follow the upload guideline.
+  # confusing. If you wish to upload your pretrained models, please directly
+  # train your model from asteroid official repo and follow the upload guideline.
   mkdir -p $expdir/publish_dir
   echo "SungFeng-Huang/SSL-pretraining-separation" > $expdir/publish_dir/recipe_name.txt
 fi
 
-#if [[ $stage -le 2 ]]; then
-  #echo "Stage 2 : Evaluation"
-  #CUDA_VISIBLE_DEVICES=$id $python_path eval.py \
-    #--task $task \
-    #--test_dir $test_dir \
-    #--use_gpu $eval_use_gpu \
-    #--exp_dir ${expdir} | tee logs/eval_${tag}.log
-  #cp logs/eval_${tag}.log $expdir/eval.log
-#fi
+if [[ $stage -le 2 ]]; then
+  echo "Stage 2 : Evaluation"
+  CUDA_VISIBLE_DEVICES=$id $python_path eval_general.py \
+    --corpus $corpus \
+    --model $model \
+    --test_dir $test_dir \
+    --task $task \
+    --use_gpu $eval_use_gpu \
+    --exp_dir ${expdir} \
+    --out_dir results/best_model \
+    --ckpt_path best_model.pth \
+    --publishable | tee logs/eval_${tag}.log
+  cp logs/eval_${tag}.log $expdir/eval.log
+fi
