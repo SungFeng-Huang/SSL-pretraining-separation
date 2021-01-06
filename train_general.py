@@ -9,14 +9,17 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 
 import asteroid
-from asteroid.models import ConvTasNet, DPRNNTasNet, DPTNet
-from asteroid.data import LibriMix, WhamDataset, Wsj0mixDataset
 from asteroid.engine.optimizers import make_optimizer
 from asteroid.engine.system import System
 from asteroid.engine.schedulers import DPTNetScheduler
 from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
 
-from utils import make_dataloaders, MultiTaskLossWrapper
+from utils import make_dataloaders
+from utils.multi_task import MultiTaskLossWrapper
+from models.sepformer_tasnet import SepFormerTasNet, SepFormer2TasNet
+pl.seed_everything(42)
+asteroid.models.register_model(SepFormerTasNet)
+asteroid.models.register_model(SepFormer2TasNet)
 
 # Keys which are not in the conf.yml file can be added here.
 # In the hierarchical dictionary created when parsing, the key `key` can be
@@ -26,24 +29,28 @@ from utils import make_dataloaders, MultiTaskLossWrapper
 # will limit the number of available GPUs for train.py .
 parser = argparse.ArgumentParser()
 parser.add_argument("--corpus", default="LibriMix", choices=["LibriMix", "wsj0-mix"])
-parser.add_argument("--model", default="ConvTasNet", choices=["ConvTasNet", "DPRNNTasNet", "DPTNet"])
+parser.add_argument("--model", default="ConvTasNet", choices=["ConvTasNet", "DPRNNTasNet", "DPTNet", "SepFormerTasNet", "SepFormer2TasNet"])
 parser.add_argument("--strategy", default="from_scratch", choices=["from_scratch", "pretrained", "multi_task"])
 parser.add_argument("--exp_dir", default="exp/tmp", help="Full path to save best validation model")
-parser.add_argument("--save_top_k", type=int, default=5, help="Save top k checkpoints. -1 for saving all checkpoints.")
-parser.add_argument("--real_batch_size", type=int, default=0, help="Batch size on all gpu when using accumulate gradients.")
-parser.add_argument("--resume_ckpt", default=None, help="Checkpoint path to load for resume-training")
+parser.add_argument("--accumulate_grad_batches", type=int, default=1, help="Total batch size = batch_size * accumulate_grad_batches")
+parser.add_argument("--comet", action="store_true", help="Comet logger")
+parser.add_argument("--resume", action="store_true", help="Resume-training")
 
 known_args = parser.parse_known_args()[0]
 if known_args.strategy == "pretrained":
-    parser.add_argument("--load_path", default=None, help="Checkpoint path to load for fine-tuning.")
+    parser.add_argument("--load_path", default=None, required=True, help="Checkpoint path to load for fine-tuning.")
 elif known_args.strategy == "multi_task":
-    parser.add_argument("--train_enh_dir", default=None, help="Multi-task data dir.")
+    parser.add_argument("--train_enh_dir", default=None, required=True, help="Multi-task data dir.")
+
+if known_args.resume:
+    parser.add_argument("--resume_ckpt", default="last.ckpt", help="Checkpoint path to load for resume-training")
+    if known_args.comet:
+        parser.add_argument("--comet_exp_key", default=None, required=True, help="Comet experiment key")
 
 
 def main(conf):
-    train_enh_dir = None if conf["main_args"]["strategy"] != "multi_task" else conf["main_args"]["train_enh_dir"]
-    batch_size = conf["training"]["batch_size"] if conf["main_args"]["real_batch_size"] == 0 else conf["main_args"]["real_batch_size"]
-    accumulate_grad_batches=int(conf["training"]["batch_size"] / batch_size)
+    train_enh_dir = conf["main_args"].get("train_enh_dir", None)
+    resume_ckpt = conf["main_args"].get("resume_ckpt", None)
 
     train_loader, val_loader, train_set_infos = make_dataloaders(
         corpus=conf["main_args"]["corpus"],
@@ -54,7 +61,7 @@ def main(conf):
         sample_rate=conf["data"]["sample_rate"],
         n_src=conf["data"]["n_src"],
         segment=conf["data"]["segment"],
-        batch_size=batch_size,
+        batch_size=conf["training"]["batch_size"],
         num_workers=conf["training"]["num_workers"],
     )
 
@@ -63,7 +70,7 @@ def main(conf):
     else:
         conf["masknet"].update({"n_src": conf["data"]["n_src"]+1})
 
-    model = getattr(asteroid, conf["main_args"]["model"])(**conf["filterbank"], **conf["masknet"])
+    model = getattr(asteroid.models, conf["main_args"]["model"])(**conf["filterbank"], **conf["masknet"])
 
     if conf["main_args"]["strategy"] == "pretrained":
         if conf["main_args"]["load_path"] is not None:
@@ -95,8 +102,8 @@ def main(conf):
 
     # Define scheduler
     scheduler = None
-    if conf["main_args"]["model"] == "DPTNet":
-        steps_per_epoch = len(train_loader) // accumulate_grad_batches
+    if conf["main_args"]["model"] in ["DPTNet", "SepFormerTasNet", "SepFormer2TasNet"]:
+        steps_per_epoch = len(train_loader) // conf["main_args"]["accumulate_grad_batches"]
         conf["scheduler"]["steps_per_epoch"] = steps_per_epoch
         scheduler = {
             "scheduler": DPTNetScheduler(
@@ -135,31 +142,57 @@ def main(conf):
     callbacks = []
     checkpoint_dir = os.path.join(exp_dir, "checkpoints/")
     checkpoint = ModelCheckpoint(
-        checkpoint_dir, monitor="val_loss", mode="min", save_top_k=conf["main_args"]["save_top_k"], verbose=True
+        dirpath=checkpoint_dir, filename='{epoch}-{step}', monitor="val_loss", mode="min",
+        save_top_k=conf["training"]["epochs"], save_last=True, verbose=True,
     )
     callbacks.append(checkpoint)
     if conf["training"]["early_stop"]:
         callbacks.append(EarlyStopping(monitor="val_loss", mode="min", patience=30, verbose=True))
 
+    loggers = []
+    tb_logger = pl.loggers.TensorBoardLogger(
+        os.path.join(exp_dir, "tb_logs/"),
+    )
+    loggers.append(tb_logger)
+    if conf["main_args"]["comet"]:
+        comet_logger = pl.loggers.CometLogger(
+            save_dir=os.path.join(exp_dir, "comet_logs/"),
+            experiment_key=conf["main_args"].get("comet_exp_key", None),
+            log_code=True,
+            log_graph=True,
+            parse_args=True,
+            log_env_details=True,
+            log_git_metadata=True,
+            log_git_patch=True,
+            log_env_gpu=True,
+            log_env_cpu=True,
+            log_env_host=True,
+        )
+        comet_logger.log_hyperparams(conf)
+        loggers.append(comet_logger)
+
 
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
-    distributed_backend = "dp" if torch.cuda.is_available() else None   # Don't use ddp for multi-task training
+    distributed_backend = "ddp" if torch.cuda.is_available() else None   # Don't use ddp for multi-task training
 
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
-        # callbacks=callbacks,  # With some unknown problems
-        checkpoint_callback=checkpoint,
-        early_stop_callback=callbacks[1],
+        logger=loggers,
+        callbacks=callbacks,
+        # checkpoint_callback=checkpoint,
+        # early_stop_callback=callbacks[1],
         default_root_dir=exp_dir,
         gpus=gpus,
         distributed_backend=distributed_backend,
         limit_train_batches=1.0,  # Useful for fast experiment
         # fast_dev_run=True, # Useful for debugging
-        # overfit_pct=0.001, # Useful for debugging
+        # overfit_batches=0.001, # Useful for debugging
         gradient_clip_val=5.0,
-        accumulate_grad_batches=accumulate_grad_batches,
-        resume_from_checkpoint=conf["main_args"]["resume_ckpt"],
+        accumulate_grad_batches=conf["main_args"]["accumulate_grad_batches"],
+        resume_from_checkpoint=resume_ckpt,
+        deterministic=True,
+        replace_sampler_ddp=False if conf["main_args"]["strategy"] == "multi_task" else True,
     )
     trainer.fit(system)
 

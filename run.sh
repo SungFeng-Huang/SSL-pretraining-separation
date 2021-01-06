@@ -35,19 +35,22 @@ task=sep_clean  # one of 'enh_single', 'enh_both', 'sep_clean', 'sep_noisy'
 sample_rate=8000
 mode=min
 n_src=2
-segment=3
+segment=4
 
 # Training config
 epochs=100
-batch_size=6
-real_batch_size=6  # batch_size per gpu
+batch_size=6 # batch size per step
+accumulate_grad_batches=1  # accumulate steps
 num_workers=8
 half_lr=yes
 early_stop=yes
 strategy=from_scratch
 load_path=
 enh_set=train-360
-save_top_k=-1
+resume=no
+comet=yes
+comet_exp_key=
+resume_ckpt=
 
 # Optim config
 optimizer=adam
@@ -118,8 +121,8 @@ echo "Results from the following experiment will be stored in $expdir"
 train_cmd="--corpus $corpus --model $model \
   --train_dir $train_dir --valid_dir $valid_dir \
   --task $task --sample_rate $sample_rate --n_src $n_src --segment $segment \
-  --epochs $epochs --batch_size $batch_size --real_batch_size $real_batch_size \
-  --num_workers $num_workers --half_lr $half_lr --early_stop $early_stop --save_top_k $save_top_k \
+  --epochs $epochs --batch_size $batch_size --accumulate_grad_batches $accumulate_grad_batches \
+  --num_workers $num_workers --half_lr $half_lr --early_stop $early_stop \
   --optimizer $optimizer --lr $lr --weight_decay $weight_decay"
 
 # Training config
@@ -129,6 +132,19 @@ if [[ $strategy == "multi_task" && -n $enh_set ]]; then
   train_cmd="$train_cmd --strategy $strategy --train_enh_dir $train_enh_dir"
 elif [[ $strategy == "pretrained" && -n $load_path ]]; then
   train_cmd="$train_cmd --strategy $strategy --load_path $load_path"
+fi
+
+if [[ $comet == "yes" ]]; then
+  train_cmd="$train_cmd --comet"
+fi
+if [[ $resume == "yes" ]]; then
+  train_cmd="$train_cmd --resume"
+  if [[ -n $resume_ckpt ]]; then
+    train_cmd="$train_cmd --resume_ckpt $resume_ckpt"
+  fi
+  if [[ -n $comet_exp_key ]]; then
+    train_cmd="$train_cmd --comet_exp_key $comet_exp_key"
+  fi
 fi
 
 # Network config
@@ -146,16 +162,24 @@ if [[ $stage -le 1 ]]; then
 	cp logs/train_${tag}.log $expdir/train.log
 
 	# Get ready to publish
+  # NOTE: Not recommend to publish from this repo, the recipe_name would be
+  # confusing. If you wish to upload your pretrained models, please directly
+  # train your model from asteroid official repo and follow the upload guideline.
   mkdir -p $expdir/publish_dir
-  echo "librimix/ConvTasNet" > $expdir/publish_dir/recipe_name.txt
+  echo "SungFeng-Huang/SSL-pretraining-separation" > $expdir/publish_dir/recipe_name.txt
 fi
 
-#if [[ $stage -le 2 ]]; then
-  #echo "Stage 2 : Evaluation"
-  #CUDA_VISIBLE_DEVICES=$id $python_path eval.py \
-    #--task $task \
-    #--test_dir $test_dir \
-    #--use_gpu $eval_use_gpu \
-    #--exp_dir ${expdir} | tee logs/eval_${tag}.log
-  #cp logs/eval_${tag}.log $expdir/eval.log
-#fi
+if [[ $stage -le 2 ]]; then
+  echo "Stage 2 : Evaluation"
+  CUDA_VISIBLE_DEVICES=$id $python_path eval_general.py \
+    --corpus $corpus \
+    --model $model \
+    --test_dir $test_dir \
+    --task $task \
+    --use_gpu $eval_use_gpu \
+    --exp_dir ${expdir} \
+    --out_dir results/best_model \
+    --ckpt_path best_model.pth \
+    --publishable | tee logs/eval_${tag}.log
+  cp logs/eval_${tag}.log $expdir/eval.log
+fi
