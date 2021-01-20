@@ -39,7 +39,7 @@ segment=4
 
 # Training config
 epochs=100
-batch_size=6 # batch size per step
+batch_size=6 # batch size per gpu per step
 accumulate_grad_batches=1  # accumulate steps
 num_workers=8
 half_lr=yes
