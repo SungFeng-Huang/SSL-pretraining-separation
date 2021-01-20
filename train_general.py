@@ -157,7 +157,7 @@ def main(conf):
         distributed_backend=distributed_backend,
         limit_train_batches=1.0,  # Useful for fast experiment
         # fast_dev_run=True, # Useful for debugging
-        overfit_batches=0.001, # Useful for debugging
+        # overfit_batches=0.001, # Useful for debugging
         gradient_clip_val=5.0,
         accumulate_grad_batches=conf["main_args"]["accumulate_grad_batches"],
         resume_from_checkpoint=resume_ckpt,
