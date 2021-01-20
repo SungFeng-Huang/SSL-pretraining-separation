@@ -18,7 +18,8 @@ from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
 from asteroid.models import save_publishable
 from asteroid.utils import tensors_to_device
 
-from utils import make_test_dataset
+from src.data import make_test_dataset
+from src.model import *
 
 
 parser = argparse.ArgumentParser()

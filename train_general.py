@@ -14,12 +14,11 @@ from asteroid.engine.system import System
 from asteroid.engine.schedulers import DPTNetScheduler
 from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
 
-from utils import make_dataloaders
-from utils.multi_task import MultiTaskLossWrapper
-from models.sepformer_tasnet import SepFormerTasNet, SepFormer2TasNet
+from src.data import make_dataloaders
+from src.engine.system import GeneralSystem
+from src.losses.multi_task_wrapper import MultiTaskLossWrapper
+from src.models import *
 pl.seed_everything(42)
-asteroid.models.register_model(SepFormerTasNet)
-asteroid.models.register_model(SepFormer2TasNet)
 
 # Keys which are not in the conf.yml file can be added here.
 # In the hierarchical dictionary created when parsing, the key `key` can be
@@ -65,38 +64,11 @@ def main(conf):
         num_workers=conf["training"]["num_workers"],
     )
 
-    if conf["main_args"]["strategy"] != "multi_task":
-        conf["masknet"].update({"n_src": conf["data"]["n_src"]})
-    else:
+    conf["masknet"].update({"n_src": conf["data"]["n_src"]})
+    if conf["main_args"]["strategy"] == "multi_task":
         conf["masknet"].update({"n_src": conf["data"]["n_src"]+1})
 
     model = getattr(asteroid.models, conf["main_args"]["model"])(**conf["filterbank"], **conf["masknet"])
-
-    if conf["main_args"]["strategy"] == "pretrained":
-        if conf["main_args"]["load_path"] is not None:
-            all_states = torch.load(conf["main_args"]["load_path"], map_location="cpu")
-            assert "state_dict" in all_states
-
-            # If the checkpoint is not the serialized "best_model.pth", its keys 
-            # would start with "model.", which should be removed to avoid none 
-            # of the parameters are loaded.
-            for key in list(all_states["state_dict"].keys()):
-                if key.startswith("model"):
-                    all_states["state_dict"][key.split('.', 1)[1]] = all_states["state_dict"][key]
-                    del all_states["state_dict"][key]
-
-            # For debugging, set strict=True to check whether only the following
-            # parameters have different sizes (since n_src=1 for pre-training
-            # and n_src=2 for fine-tuning):
-            # for ConvTasNet: "masker.mask_net.1.*"
-            # for DPRNNTasNet/DPTNet: "masker.first_out.1.*"
-            if conf["main_args"]["model"] == "ConvTasNet":
-                del all_states["state_dict"]["masker.mask_net.1.weight"]
-                del all_states["state_dict"]["masker.mask_net.1.bias"]
-            elif conf["main_args"]["model"] in ["DPRNNTasNet", "DPTNet"]:
-                del all_states["state_dict"]["masker.first_out.1.weight"]
-                del all_states["state_dict"]["masker.first_out.1.bias"]
-            model.load_state_dict(all_states["state_dict"], strict=False)
 
     optimizer = make_optimizer(model.parameters(), **conf["optim"])
 
@@ -124,14 +96,12 @@ def main(conf):
         yaml.safe_dump(conf, outfile)
 
     # Define Loss function.
-    if conf["main_args"]["strategy"] == "multi_task":
-        loss_func = MultiTaskLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
-    else:
-        loss_func = PITLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
-    system = System(
+    pit_wrapper = MultiTaskLossWrapper if conf["main_args"]["strategy"] == "multi_task" else PITLossWrapper
+    loss_func = pit_wrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
+    system = GeneralSystem(
         model=model,
-        loss_func=loss_func,
         optimizer=optimizer,
+        loss_func=loss_func,
         train_loader=train_loader,
         val_loader=val_loader,
         scheduler=scheduler,
@@ -187,7 +157,7 @@ def main(conf):
         distributed_backend=distributed_backend,
         limit_train_batches=1.0,  # Useful for fast experiment
         # fast_dev_run=True, # Useful for debugging
-        # overfit_batches=0.001, # Useful for debugging
+        overfit_batches=0.001, # Useful for debugging
         gradient_clip_val=5.0,
         accumulate_grad_batches=conf["main_args"]["accumulate_grad_batches"],
         resume_from_checkpoint=resume_ckpt,
