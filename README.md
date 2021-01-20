@@ -23,25 +23,13 @@ Train
 ------------------------------------
 Run `scripts/*.sh` to reproduce experiments in the paper.
 
-------------------------------------
-Organizing Progress
-------------------------------------
-### Corpus Preprocessing
-* [x] WSJ0-2mix
-* [x] Libri2Mix
-
 ### Models
 * [x] ConvTasNet
 * [x] DPRNNTasNet
 * [x] DPTNet
+* [x] SepFormerTasNet (my implementation of [SepFormer](https://arxiv.org/pdf/2010.13154.pdf))
+* [x] SepFormer2TasNet (my modification of [SepFormer](https://arxiv.org/pdf/2010.13154.pdf))
 
-### Training
-* [x] WSJ0-2mix
-* [x] Libri2Mix
-
-### Evaluation
-* [x] WSJ0-2mix
-* [x] Libri2Mix
 
 ------------------------------------
 Reference
