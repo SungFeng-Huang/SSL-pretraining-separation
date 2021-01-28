@@ -26,6 +26,7 @@ class GeneralSystem(System):
             # of the parameters are loaded.
             for key in list(all_states["state_dict"].keys()):
                 if key.startswith("model"):
+                    print(f"key {key} changed to {key.split('.', 1)[1]}")
                     all_states["state_dict"][key.split('.', 1)[1]] = all_states["state_dict"][key]
                     del all_states["state_dict"][key]
 
@@ -35,9 +36,11 @@ class GeneralSystem(System):
             # for ConvTasNet: "masker.mask_net.1.*"
             # for DPRNNTasNet/DPTNet: "masker.first_out.1.*"
             if self.config["main_args"]["model"] == "ConvTasNet":
+                print(f"key masker.mask_net.1.* removed")
                 del all_states["state_dict"]["masker.mask_net.1.weight"]
                 del all_states["state_dict"]["masker.mask_net.1.bias"]
             elif self.config["main_args"]["model"] in ["DPRNNTasNet", "DPTNet", "SepFormerTasNet", "SepFormer2TasNet"]:
+                print(f"key masker.first_out.1.* removed")
                 del all_states["state_dict"]["masker.first_out.1.weight"]
                 del all_states["state_dict"]["masker.first_out.1.bias"]
             self.model.load_state_dict(all_states["state_dict"], strict=False)
