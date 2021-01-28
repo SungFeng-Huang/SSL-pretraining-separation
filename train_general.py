@@ -1,6 +1,7 @@
 import os
 import argparse
 import json
+import comet_ml
 
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau

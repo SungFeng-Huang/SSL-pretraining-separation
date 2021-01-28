@@ -1,8 +1,9 @@
 __pycache__/
-tools/
-data/
-pretrained/
-exp/
+tools
+data
+pretrained
+exp
+logs
 
-wham_wav/
-wsj0_wav/
+wham_wav
+wsj0_wav
