@@ -19,7 +19,7 @@ from asteroid.models import save_publishable
 from asteroid.utils import tensors_to_device
 
 from src.data import make_test_dataset
-from src.model import *
+from src.models import *
 
 
 parser = argparse.ArgumentParser()
