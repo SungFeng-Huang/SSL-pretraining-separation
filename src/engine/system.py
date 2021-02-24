@@ -21,8 +21,8 @@ class GeneralSystem(System):
             all_states = torch.load(self.config["main_args"]["load_path"], map_location="cpu")
             assert "state_dict" in all_states
 
-            # If the checkpoint is not the serialized "best_model.pth", its keys 
-            # would start with "model.", which should be removed to avoid none 
+            # If the checkpoint is not the serialized "best_model.pth", its keys
+            # would start with "model.", which should be removed to avoid none
             # of the parameters are loaded.
             for key in list(all_states["state_dict"].keys()):
                 if key.startswith("model"):
