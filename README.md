@@ -1,6 +1,6 @@
 # SSL-pretraining-separation
-This is the official repository of [SELF-SUPERVISED PRE-TRAINING REDUCES LABEL PERMUTATION INSTABILITY OF SPEECH SEPARATION
-](https://arxiv.org/pdf/2010.15366.pdf).
+This is the official repository of [Stabilizing Label Assignment for Speech Separation by Self-supervised Pre-training
+](https://arxiv.org/abs/2010.15366).
 
 ------------------------------------
 Corpus Preprocessing
