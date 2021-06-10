@@ -30,6 +30,7 @@ Run `scripts/*.sh` to reproduce experiments in the paper.
 * [x] SepFormerTasNet (my implementation of [SepFormer](https://arxiv.org/pdf/2010.13154.pdf))
 * [x] SepFormer2TasNet (my modification of [SepFormer](https://arxiv.org/pdf/2010.13154.pdf))
 
+Note: our SepFormer does not include data augmentation and dynamic mixing, thus could not perform as well as the official results.
 
 ------------------------------------
 Reference
