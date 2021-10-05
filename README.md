@@ -2,6 +2,9 @@
 This is the official repository of [Stabilizing Label Assignment for Speech Separation by Self-supervised Pre-training
 ](https://arxiv.org/abs/2010.15366).
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/self-supervised-pre-training-reduces-label/speech-separation-on-libri2mix)](https://paperswithcode.com/sota/speech-separation-on-libri2mix?p=self-supervised-pre-training-reduces-label)
+ 	
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/self-supervised-pre-training-reduces-label/speech-separation-on-wsj0-2mix)](https://paperswithcode.com/sota/speech-separation-on-wsj0-2mix?p=self-supervised-pre-training-reduces-label)
 ------------------------------------
 Corpus Preprocessing
 ------------------------------------
